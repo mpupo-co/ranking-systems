@@ -12,7 +12,7 @@ def split_ds_sellers(ratings, n_sellers):
     n_sellers : int - Number of sellers
 
     Returns
-    -------
+    ----------
     split_ratings : pandas DataFrame - columns: user, seller, item, rating
     """
 
