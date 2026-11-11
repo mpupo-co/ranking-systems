@@ -179,6 +179,120 @@ def add_spammers(ratings, spam_ratio, rating_min=0.2, rating_max=1.0, seed=42):
 
     return pd.concat([ratings] + rows, ignore_index=True)
 
-def bribe(ratings):
-    bribe_item = ratings.groupby("item")
-    return 0
+def bribe(ratings, r_max=1, num_bribe_users=10):
+    """
+    Simulate a bribery attack on the most-rated item.
+
+    The seller of the most-rated item bribes the first `num_bribe_users`
+    users who rated it below the maximum rating, changing each of their
+    ratings to the maximum.
+
+    Parameters
+    ----------
+    ratings : pandas DataFrame
+        Normalized ratings, columns: user, item, rating.
+    r_max : float
+        Maximum rating. Bribed ratings are set to this value.
+    num_bribe_users : int
+        Number of users to bribe.
+
+    Returns
+    -------
+    bribed_ratings: pandas DataFrame
+        Copy of the original ratings with the bribed users.
+    bribe_item
+    """
+    bribed_ratings = ratings.copy()
+
+    # Select item to bribe
+    bribe_item = ratings.groupby("item")["item"].count().idxmax()
+
+    # Select users to bribe 
+    bribe_users = ratings[(ratings["item"] == bribe_item) & (ratings["rating"]<r_max)].head(num_bribe_users)
+    bribed_ratings.loc[bribe_users.index, "rating"] = r_max
+
+    return bribed_ratings, bribe_item
+
+def wealth(ratings, ranking, bribe_item):
+    """
+    Wealth of the item's seller: Ji = |Ui| * ri.
+
+    Parameters
+    ----------
+    ratings : pandas DataFrame - Ratings, with columns: user, item, rating
+    bribe_item : item whose seller's wealth is computed.
+    ranking : pandas Series - Item scores
+
+    Returns
+    -------
+    float : computed wealth of `bribe_item`
+    """
+
+    # Users who rated bribe_items
+    users = ratings[ratings["item"] == bribe_item]
+    n_users = users["user"].nunique()
+
+    return n_users * ranking[bribe_item]
+
+def bribing_cost(clean_ratings, bribed_ratings, bribe_item):
+    """
+    Cost of the attack
+
+    Parameters
+    ----------
+    clean_ratings : pandas DataFrame
+        Original ratings, with columns: user, item, rating.
+    bribed_ratings : pandas DataFrame
+        Ratings after the bribing strategy, same index as `clean_ratings`.
+    bribe_item :
+        Item whose seller performed the bribing.
+
+    Returns
+    -------
+    float
+        Sum of the absolute rating changes on `bribe_item`.
+    """
+    is_bribed_item = clean_ratings["item"] == bribe_item
+
+    ratings_before = clean_ratings.loc[is_bribed_item, "rating"]
+    ratings_after = bribed_ratings.loc[is_bribed_item, "rating"]
+
+    rating_changes = ratings_after - ratings_before
+
+    return rating_changes.abs().sum()
+
+
+def compute_profit(clean_ratings, bribed_ratings, clean_ranking, bribed_ranking, bribe_item):
+    """
+    Profit of the bribing strategy: π = J_after - J_before.
+
+    J_before = |U_i| * r_i                    (clean ratings and ranking)
+    J_after  = |U_i^ς| * r_i^ς - cost         (bribed ratings and ranking)
+
+    Parameters
+    ----------
+    clean_ratings, bribed_ratings : pandas DataFrame
+        Ratings before and after the attack, with columns: user, item, rating.
+    clean_ranking, bribed_ranking : pandas Series
+        Item scores s_i before and after the attack, indexed by item.
+    bribe_item :
+        Item whose seller performed the bribing.
+
+    Returns
+    -------
+    dict
+        J_before, J_after, cost, profit and profitable (True if profit > 0).
+    """
+    wealth_before = wealth(clean_ratings, clean_ranking, bribe_item)
+    cost = bribing_cost(clean_ratings, bribed_ratings, bribe_item)
+    wealth_after = wealth(bribed_ratings, bribed_ranking, bribe_item) - cost
+
+    profit = wealth_after - wealth_before
+
+    return {
+        "J_before": wealth_before,
+        "J_after": wealth_after,
+        "cost": cost,
+        "profit": profit,
+        "profitable": profit > 0,
+    }
