@@ -18,6 +18,25 @@ def load_ml100k():
 
     # drop timestamp
     return ratings[["user", "item","rating"]]
+
+def load_amazonMusic():
+    """
+    Load Amazon Music dataset into a dataframe and normalizes ratings
+    
+    Returns
+    -------
+    ratings : pandas DataFrame - columns: user, item, rating
+    """
+
+    url = "https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/benchmark/0core/rating_only/Digital_Music.csv.gz"
+    ratings = pd.read_csv(url, compression="gzip", header=0, names=["user", "item", "rating", "timestamp"])
+    
+    # Normalize dividing by the max rating
+    max_rate = ratings["rating"].max()
+    ratings["rating"] = ratings["rating"]/max_rate
+
+    # drop timestamp
+    return ratings[["user", "item","rating"]]
                           
 def kendall(r1, r2):
     """
@@ -109,10 +128,6 @@ def reputation_ranking(ratings, distance="l1", aggregate="avg", lam=0.1, max_ite
 
     return r.sort_values(ascending=False)
 
-import numpy as np
-import pandas as pd
-
-
 def add_spammers(ratings, spam_ratio, rating_min=0.2, rating_max=1.0, seed=42):
     """
     Add spamming users to a ratings dataset (Li et al., robustness experiment).
@@ -148,7 +163,7 @@ def add_spammers(ratings, spam_ratio, rating_min=0.2, rating_max=1.0, seed=42):
     for spam_type in ["random", "max", "min"]:
         for k in range(n_per_type):
             user = f"spam_{spam_type}_{k}"
-            chosen = rng.choice(items, size=n_items, replace=False)
+            chosen = rng.choice(items, size=n_items, replace=False) # set of items to spam
 
             if spam_type == "random":
                 values = rng.uniform(rating_min, rating_max, size=n_items)
@@ -163,3 +178,7 @@ def add_spammers(ratings, spam_ratio, rating_min=0.2, rating_max=1.0, seed=42):
         return ratings.copy()
 
     return pd.concat([ratings] + rows, ignore_index=True)
+
+def bribe(ratings):
+    bribe_item = ratings.groupby("item")
+    return 0
